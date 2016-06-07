@@ -1,4 +1,3 @@
-from globals import N_PARALLEL_GAMES
 
 import numpy as np
 
@@ -82,8 +81,8 @@ class Controller:
         #all together
         self.agent = Agent([self.observation_layer,self.goal_layer],
                       memory_dict,
-                      [q_eval,self.dnn_output],
-                      self.resolver)
+                      q_eval,
+                      [self.resolver,self.dnn_output])
 
 
 
@@ -95,9 +94,12 @@ class Controller:
         self.embedding_size = embedding_size
 
         self.applier_fun = self.agent.get_react_function()
+        
+        self.weights = lasagne.layers.get_all_params(self.resolver,trainable=True)
 
 
-    def step(self,observation,goal,prev_memories='zeros', batch_size=N_PARALLEL_GAMES,):
+
+    def step(self,observation,goal,prev_memories, batch_size):
         """ returns actions and new states given observation and prev state
         Prev state in default setup should be [prev window,]"""
         # default to zeros
@@ -108,8 +110,8 @@ class Controller:
         res = self.applier_fun(np.array(observation),
                           np.array(goal),
                           *prev_memories)
-        action = res[0]
-        memories = res[1:]
-        return action, memories
+        action,metacontroller_inp = res[:2]
+        memories = res[2:]
+        return action, memories, metacontroller_inp
 
 

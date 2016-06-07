@@ -11,7 +11,6 @@ from lasagne.layers import DropoutLayer,DenseLayer, batch_norm,Conv2DLayer
 
 from agentnet.memory import GRUCell
 from agentnet.resolver import EpsilonGreedyResolver
-from agentnet.memory.logical import CounterLayer,SwitchLayer
 from agentnet.agent import Agent
 
 
@@ -24,19 +23,14 @@ class MetaController:
                  ):
 
         #image observation at current tick goes here
-        self.observed_state = InputLayer(controller.observation_shape,
+        self.observed_state = InputLayer(controller.dnn_output.output_shape,
                                        name="cnn output")
 
         prev_gru0 = InputLayer((None,gru0_size),name='prev gru0')
 
         self.gru0 = GRUCell(prev_state=prev_gru0,input_or_inputs=self.observed_state)
 
-        prev_counter = InputLayer((None,),name='prev counter tick')
-        counter = CounterLayer(prev_counter,k=controller.metacontroller_period)
-
-
-        memory_dict = {self.gru0:prev_gru0,
-                       counter:prev_counter}
+        memory_dict = {self.gru0:prev_gru0}
 
 
         #q_eval
@@ -47,24 +41,28 @@ class MetaController:
 
         #resolver
         self.resolver = EpsilonGreedyResolver(q_eval,name="resolver")
+        
+        
 
         #all together
         self.agent = Agent(self.observed_state,
                       memory_dict,
                       q_eval,
-                      self.resolver)
+                      [self.resolver,q_eval])
 
 
 
         self.controller = controller
-        self.observation_shape = controller.observation_shape
+        self.observation_shape = controller.dnn_output.output_shape
         self.n_goals = controller.n_goals
-        self.metacontroller_period = controller.metacontroller_period
-
+        self.period = controller.metacontroller_period
         self.applier_fun = self.agent.get_react_function()
+        
+        
+        self.weights = lasagne.layers.get_all_params(self.resolver,trainable=True)
 
 
-    def step(self,observation, prev_memories='zeros', batch_size=N_PARALLEL_GAMES):
+    def step(self,observation, prev_memories, batch_size):
         """ returns actions and new states given observation and prev state
         Prev state in default setup should be [prev window,]"""
         # default to zeros
@@ -75,8 +73,7 @@ class MetaController:
                                       dtype='float32')
                              for mem in self.agent.agent_states]
         res = self.applier_fun(np.array(observation),
-                          np.random.randint(0, self.n_goals, size=batch_size, dtype='int32'),
                           *prev_memories)
-        action = res[0]
-        memories = res[1:]
-        return action, memories
+        action,q_eval = res[:2]
+        memories = res[2:]
+        return action, memories, q_eval.max(axis=-1)

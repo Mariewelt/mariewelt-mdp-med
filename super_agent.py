@@ -11,8 +11,10 @@ class MdpAgent(object):
         self.pool_size = pool_size
         self.n_steps = n_steps
 
-    def step(self):
-        pass
+    def step(self, observation, prev_memories='zeros'):
+        action = None
+        memories = None
+        return action, memories
 
     def fit(self, n_epochs=100):
 

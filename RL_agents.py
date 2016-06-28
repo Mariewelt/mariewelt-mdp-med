@@ -63,7 +63,7 @@ class BasicRLAgent(MdpAgent):
 
         updates = lasagne.updates.adadelta(self.loss, weights, learning_rate=0.01)
         train_fun = theano.function([], [self.loss], updates=updates)
-        super(BasicRLAgent, self).__init__(env, pool, train_fun, pool_size, n_steps)
+        super(BasicRLAgent, self).__init__(env, pool, train_fun, pool_size, replay_seq_len)
 
     def step(self, observation, prev_memories="zeros", batch_size=None):
         """

@@ -1,35 +1,42 @@
-import lasagne
-
-from agentnet.environment.SessionPoolEnvironment import append_sessions
-from lasagne.layers import batch_norm
 
 class MdpAgent(object):
-    def __init__(self, env, pool, train_fun, pool_size=150, n_steps=50):
+    def __init__(self, env, pool, train_fun, pool_size=150, replay_seq_len=20):
         self.env = env
         self.pool = pool
         self.train_fun = train_fun
+        self.train_fun = train_fun
         self.pool_size = pool_size
-        self.n_steps = n_steps
+        self.replay_seq_len = replay_seq_len
 
     def step(self, observation, prev_memories='zeros'):
         action = None
         memories = None
         return action, memories
 
-    def fit(self, n_epochs=100):
+    def update_pool(self, observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                    memory_tensor, preceding_memory_states):
+        self.env.append_sessions(observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                                 preceding_memory_states, max_pool_size=self.pool_size)
 
-        for i in xrange(n_epochs):
+    def reload_pool(self, observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                    memory_tensor, preceding_memory_states):
+        self.env.load_sessions(observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                               preceding_memory_states)
+
+    def fit(self, n_epochs=100):
+        for epoch_counter in xrange(n_epochs):
             preceding_memory_states = list(self.pool.prev_memory_states)
 
             # get interaction sessions
-            observation_tensor, action_tensor, reward_tensor, _, is_alive_tensor, _ = \
-                self.pool.interact(self.step, n_steps=self.n_steps)
+            observation_tensor, action_tensor, reward_tensor, memory_tensor, is_alive_tensor, _ = \
+                self.pool.interact(self.step, n_steps=self.replay_seq_len)
 
             # load new sessions into the replay pool
-            append_sessions(observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
-                            preceding_memory_states, max_pool_size=self.pool_size)
+            if self.pool_size is None:
+                self.reload_pool(observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                                 memory_tensor, preceding_memory_states)
+            else:
+                self.update_pool(observation_tensor, action_tensor, reward_tensor, is_alive_tensor,
+                                 memory_tensor, preceding_memory_states)
 
-            loss = self.train_fun()
-
-
-
+            self.train_fun()
